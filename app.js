@@ -24,6 +24,7 @@ let freq    = 'monthly';
 let cur     = '$';
 let period  = 'monthly';
 let myChart = null;
+let splitterChart = null;
 let isLight = false;
 let passcode= '1234';
 let pcEntry = '';
@@ -44,15 +45,17 @@ const dispInc= () => freq==='biweekly'?biwk(baseMo):freq==='yearly'?baseMo*12:ba
 
 // ── PAGES ──
 function showPage(id, btn) {
-  // Clean up splitter chart when navigating away from splitter
+  // Destroy splitter chart when leaving so canvas is clean on return
   if(id !== 'splitter' && splitterChart){
-    splitterChart.destroy(); splitterChart = null;
+    splitterChart.destroy();
+    splitterChart = null;
   }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.ntab').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   if(btn) btn.classList.add('active');
-  if(id==='splitter') renderSplitter();
+  // Always re-render splitter so it picks up latest cats/data
+  if(id==='splitter' && typeof renderSplitter==='function') renderSplitter();
 }
 
 // ── THEME ──
@@ -136,7 +139,7 @@ function updateDash(){
   updateCatBars();
   document.getElementById('dVal').textContent=f(inc*mult);
   const data=cats.map(c=>Math.max(+c.pct||0,0)), lbls=cats.map(c=>c.name), cols=cats.map((_,i)=>colors[i%colors.length]);
-  if(myChart){ myChart.data.labels=lbls; myChart.data.datasets[0].data=data; myChart.data.datasets[0].backgroundColor=cols; myChart.update(); }
+  if(myChart){ myChart.data.labels=lbls; myChart.data.datasets[0].data=data; myChart.data.datasets[0].backgroundColor=cols; myChart.update('none'); }
   else{ myChart=new Chart(document.getElementById('donutC'),{type:'doughnut',data:{labels:lbls,datasets:[{data,backgroundColor:cols,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'67%',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.label+': '+Math.round(ctx.parsed)+'% \xb7 '+f(inc*mult*ctx.parsed/100)}}}}}); }
   document.getElementById('legEl').innerHTML=cats.map((c,i)=>{const a=inc*mult*(+c.pct||0)/100;return'<div class="li"><span class="ldot" style="background:'+colors[i%colors.length]+'"></span><span>'+c.name+'</span><span class="lval">'+f(a)+'</span></div>';}).join('');
   const maxA=Math.max(...cats.map(c=>inc*mult*(+c.pct||0)/100),1);
@@ -272,21 +275,21 @@ function startDataSync(uid){
 }
 function loadFromCloud(d){
   window._cacheTs = d._savedAt || 0;
-  _lastSavedHash = dataHash(); // prevent immediate re-save after load
   if(d.cats) cats=[...d.cats];
   if(d.colors) colors=[...d.colors];
   if(d.baseMo!==undefined){ baseMo=d.baseMo; document.getElementById('incInput').value=Math.round(dispInc()).toLocaleString(); document.getElementById('aInc').value=Math.round(baseMo); }
   if(d.cur){ cur=d.cur; document.getElementById('curSym').textContent=cur; document.getElementById('aCur').value=cur; }
-  if(d.isLight !== undefined && d.isLight !== isLight){ isLight=d.isLight; document.body.classList.toggle('light', isLight); }
+  if(d.isLight !== undefined){ isLight=d.isLight; document.body.classList.toggle('light', isLight); }
   if(d.incSplits) window._incSplits=[...d.incSplits];
   if(d.paycheckHistory) window._paycheckHistory=[...d.paycheckHistory];
+  _lastSavedHash = dataHash(); // set AFTER loading so hash reflects loaded data
   if(myChart){myChart.destroy();myChart=null;}
   buildCatList(); updateDash(); rebuildACatList(); rebuildCatColList();
   // If splitter page is open, only update history — never re-render the whole page
   const splitterActive = document.getElementById('page-splitter').classList.contains('active');
   if(splitterActive){
-    renderHistory();
-    recalcSplit();
+    if(typeof renderHistory==='function') renderHistory();
+    if(typeof recalcSplit==='function') recalcSplit();
   }
 }
 function saveToCloud(){
