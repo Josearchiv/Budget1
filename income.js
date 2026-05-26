@@ -13,6 +13,8 @@ function getActiveSplits() {
 
 function renderSplitter() {
   const pg = document.getElementById('page-splitter');
+  // Always rebuild so latest data (cats, colors) is reflected
+  if(splitterChart){ splitterChart.destroy(); splitterChart = null; }
   pg.innerHTML = `
     <div class="phdr">
       <div>
