@@ -500,8 +500,8 @@ function openBillModal(id){
           <div class="modal-lbl">Amount (${cur})</div>
           <input class="modal-input" type="number" id="bAmount" placeholder="0.00" value="${bill?.amount||''}" autocomplete="off">
         </div>
-        <div class="modal-row">
-          <div class="modal-lbl">Due day of month</div>
+        <div class="modal-row" id="dueDayRow">
+          <div class="modal-lbl" id="dueDayLbl">Due day of month</div>
           <input class="modal-input" type="number" id="bDueDay" placeholder="1–31" min="1" max="31" value="${bill?.dueDay||''}" autocomplete="off">
         </div>
       </div>
@@ -514,7 +514,7 @@ function openBillModal(id){
         </div>
         <div class="modal-row">
           <div class="modal-lbl">Frequency</div>
-          <select class="modal-select" id="bFreq">
+          <select class="modal-select" id="bFreq" onchange="updateDueDayVisibility()">
             ${Object.entries(FREQ_LABELS).map(([v,l])=>`<option value="${v}" ${(bill?.frequency||'monthly')===v?'selected':''}>${l}</option>`).join('')}
           </select>
         </div>
@@ -523,11 +523,15 @@ function openBillModal(id){
         <div class="modal-lbl">Notes (optional)</div>
         <input class="modal-input" type="text" id="bNotes" placeholder="Any extra details…" value="${bill?.notes||''}" autocomplete="off">
       </div>
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--bdr)">
-        <div class="admin-toggle ${bill?.recurring?'on':''}" id="recurringToggle" onclick="this.classList.toggle('on')"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--bdr)">
         <div>
           <div style="font-size:13px;font-weight:500;color:var(--tx)">Recurring bill</div>
           <div style="font-size:11px;color:var(--txm)">Auto-resets after each payment cycle</div>
+        </div>
+        <div id="recurringToggle" onclick="toggleRecurring(this)"
+          style="width:44px;height:24px;border-radius:12px;background:${bill?.recurring?'var(--ac)':'var(--surf2)'};border:1px solid ${bill?.recurring?'var(--ac)':'var(--bdr)'};cursor:pointer;position:relative;transition:all .2s;flex-shrink:0"
+          data-on="${bill?.recurring?'true':'false'}">
+          <div style="position:absolute;top:3px;left:${bill?.recurring?'21px':'3px'};width:16px;height:16px;border-radius:50%;background:${bill?.recurring?'#fff':'var(--txm)'};transition:all .2s"></div>
         </div>
       </div>
       <div class="modal-actions">
@@ -537,7 +541,44 @@ function openBillModal(id){
     </div>
   `;
   document.body.appendChild(modal);
-  setTimeout(()=>document.getElementById('bName').focus(),50);
+  setTimeout(()=>{ document.getElementById('bName').focus(); updateDueDayVisibility(); },50);
+}
+
+function toggleRecurring(el){
+  const on = el.dataset.on !== 'true';
+  el.dataset.on = on ? 'true' : 'false';
+  el.style.background = on ? 'var(--ac)' : 'var(--surf2)';
+  el.style.borderColor = on ? 'var(--ac)' : 'var(--bdr)';
+  const thumb = el.querySelector('div');
+  if(thumb){
+    thumb.style.left = on ? '21px' : '3px';
+    thumb.style.background = on ? '#fff' : 'var(--txm)';
+  }
+  // Show/hide due day based on recurring + frequency
+  updateDueDayVisibility();
+}
+
+function updateDueDayVisibility(){
+  const row = document.getElementById('dueDayRow');
+  const lbl = document.getElementById('dueDayLbl');
+  const inp = document.getElementById('bDueDay');
+  const freqEl = document.getElementById('bFreq');
+  const recurringEl = document.getElementById('recurringToggle');
+  if(!row || !freqEl || !recurringEl) return;
+
+  const isRecurring = recurringEl.dataset.on === 'true';
+  const freq2 = freqEl.value;
+
+  // Monthly and one-time bills always need a due day
+  // Daily/weekly/biweekly recurring bills don't need one
+  const needsDueDay = !isRecurring || freq2 === 'monthly' || freq2 === 'once';
+
+  row.style.opacity = needsDueDay ? '1' : '0.4';
+  if(lbl) lbl.textContent = needsDueDay ? 'Due day of month' : 'Due day (optional for this frequency)';
+  if(inp){
+    inp.required = needsDueDay;
+    inp.style.borderColor = needsDueDay ? '' : 'var(--bdr)';
+  }
 }
 
 function closeBillModal(){
@@ -551,18 +592,23 @@ function saveBill(existingId){
   const category=document.getElementById('bCat').value;
   const frequency=document.getElementById('bFreq').value;
   const notes=document.getElementById('bNotes').value.trim();
-  const recurring=document.getElementById('recurringToggle').classList.contains('on');
+  const recurring=document.getElementById('recurringToggle').dataset.on==='true';
 
   if(!name){document.getElementById('bName').style.borderColor='var(--rd)';return;}
   if(!amount||parseFloat(amount)<=0){document.getElementById('bAmount').style.borderColor='var(--rd)';return;}
-  if(!dueDay||parseInt(dueDay)<1||parseInt(dueDay)>31){document.getElementById('bDueDay').style.borderColor='var(--rd)';return;}
+  const recurringOn = document.getElementById('recurringToggle').dataset.on==='true';
+  const needsDueDay2 = !recurringOn || frequency==='monthly' || frequency==='once';
+  if(needsDueDay2 && (!dueDay||parseInt(dueDay)<1||parseInt(dueDay)>31)){
+    document.getElementById('bDueDay').style.borderColor='var(--rd)'; return;
+  }
+  const finalDueDay = dueDay ? parseInt(dueDay) : 1;
 
   if(!window._bills) window._bills=[];
   if(existingId){
     const b=window._bills.find(x=>x.id===existingId);
-    if(b){b.name=name;b.amount=parseFloat(amount);b.dueDay=parseInt(dueDay);b.category=category;b.frequency=frequency;b.notes=notes;b.recurring=recurring;}
+    if(b){b.name=name;b.amount=parseFloat(amount);b.dueDay=finalDueDay;b.category=category;b.frequency=frequency;b.notes=notes;b.recurring=recurring;}
   } else {
-    window._bills.push({id:'b'+Date.now(),name,amount:parseFloat(amount),dueDay:parseInt(dueDay),category,frequency,notes,recurring,paid:false,paidDate:null});
+    window._bills.push({id:'b'+Date.now(),name,amount:parseFloat(amount),dueDay:finalDueDay,category,frequency,notes,recurring,paid:false,paidDate:null});
   }
   closeBillModal();
   scheduleSave();
