@@ -49,6 +49,18 @@ function renderSplitter() {
               <option value="Other">Other</option>
             </select>
           </div>
+          <!-- BILLS ALLOCATION SECTION -->
+          <div id="spBillsSection" style="display:none;margin-bottom:12px">
+            <div style="font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--txm);margin-bottom:7px;display:flex;align-items:center;justify-content:space-between">
+              <span><i class="ti ti-alert-circle" style="color:var(--am)"></i> Set aside for bills</span>
+              <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--am)" id="spBillsTotal"></span>
+            </div>
+            <div id="spBillsList" style="display:flex;flex-direction:column;gap:6px"></div>
+            <div style="height:1px;background:var(--bdr);margin:10px 0"></div>
+            <div style="font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--txm);margin-bottom:7px">
+              <i class="ti ti-percentage" style="color:var(--ac)"></i> Remaining to split
+            </div>
+          </div>
           <div id="spBreakdown" style="display:flex;flex-direction:column;gap:7px">
             <div style="text-align:center;color:var(--txf);font-size:13px;padding:20px 0">Enter an amount above to see your breakdown</div>
           </div>
@@ -185,42 +197,126 @@ function recalcSplit() {
   const totalAmt = document.getElementById('spTotalAmt');
   const donutVal = document.getElementById('spDonutVal');
   const legend = document.getElementById('spLegend');
+  const billsSection = document.getElementById('spBillsSection');
+  const billsList = document.getElementById('spBillsList');
+  const billsTotal = document.getElementById('spBillsTotal');
 
-  if (!amt || splits.length === 0) {
+  if (!amt) {
     if (bd) bd.innerHTML = '<div style="text-align:center;color:var(--txf);font-size:13px;padding:20px 0">Enter an amount above to see your breakdown</div>';
     if (totalRow) totalRow.style.display = 'none';
     if (donutVal) donutVal.textContent = '—';
+    if (billsSection) billsSection.style.display = 'none';
     updateSplitterDonut([], []);
     return;
   }
 
-  if (bd) {
-    bd.innerHTML = splits.map(s => {
-      const portion = amt * (parseFloat(s.pct) || 0) / 100;
-      return `<div class="sp-bd-row">
-        <div class="sp-bd-dot" style="background:${s.color}"></div>
-        <span class="sp-bd-name">${s.name}</span>
-        <span class="sp-bd-pct">${Math.round(parseFloat(s.pct) || 0)}%</span>
-        <span class="sp-bd-amt">${cur}${Math.round(portion).toLocaleString()}</span>
+  // ── BILLS ALLOCATION ──
+  const bills = window._bills || [];
+  const today = new Date();
+  const upcoming = bills.filter(b => {
+    if (b.paid) return false;
+    const due = nextDueDate(b);
+    const daysUntil = Math.ceil((due - today) / (1000*60*60*24));
+    return daysUntil <= 45; // show bills due within 45 days
+  }).sort((a,b) => nextDueDate(a) - nextDueDate(b));
+
+  let billsReserve = 0;
+  if (upcoming.length > 0 && billsSection) {
+    billsSection.style.display = 'block';
+    billsList.innerHTML = upcoming.map(b => {
+      const due = nextDueDate(b);
+      const daysUntil = Math.ceil((due - today) / (1000*60*60*24));
+      const urgency = daysUntil <= 3 ? 'var(--rd)' : daysUntil <= 7 ? 'var(--am)' : 'var(--gr)';
+      const setAside = calcSetAside(b, amt);
+      billsReserve += setAside;
+      return `<div class="sp-bd-row" style="border-left:3px solid ${urgency}">
+        <div class="sp-bd-dot" style="background:${urgency}"></div>
+        <div style="flex:1">
+          <div class="sp-bd-name">${b.name}</div>
+          <div style="font-size:10px;color:var(--txm)">Due ${formatDueDate(due)} · ${daysUntil <= 0 ? 'Overdue!' : daysUntil === 1 ? 'Tomorrow' : 'in '+daysUntil+' days'}</div>
+        </div>
+        <span class="sp-bd-amt" style="color:${urgency}">${cur}${Math.round(setAside).toLocaleString()}</span>
       </div>`;
     }).join('');
+    if (billsTotal) billsTotal.textContent = cur + Math.round(billsReserve).toLocaleString();
+  } else if (billsSection) {
+    billsSection.style.display = 'none';
   }
 
-  const allocatedTotal = splits.reduce((s, x) => s + amt * (parseFloat(x.pct) || 0) / 100, 0);
+  // ── SPLITS (on remaining after bills) ──
+  const remaining = Math.max(amt - billsReserve, 0);
+  if (splits.length > 0) {
+    if (bd) {
+      bd.innerHTML = splits.map(s => {
+        const portion = remaining * (parseFloat(s.pct) || 0) / 100;
+        return `<div class="sp-bd-row">
+          <div class="sp-bd-dot" style="background:${s.color}"></div>
+          <span class="sp-bd-name">${s.name}</span>
+          <span class="sp-bd-pct">${Math.round(parseFloat(s.pct)||0)}%</span>
+          <span class="sp-bd-amt">${cur}${Math.round(portion).toLocaleString()}</span>
+        </div>`;
+      }).join('');
+    }
+  } else {
+    if (bd) bd.innerHTML = '<div style="text-align:center;color:var(--txf);font-size:13px;padding:12px 0">No splits configured</div>';
+  }
+
+  const allocatedTotal = billsReserve + splits.reduce((s,x) => s + remaining*(parseFloat(x.pct)||0)/100, 0);
   if (totalRow) totalRow.style.display = 'flex';
   if (totalAmt) totalAmt.textContent = cur + Math.round(allocatedTotal).toLocaleString();
   if (donutVal) donutVal.textContent = cur + Math.round(amt).toLocaleString();
 
-  const data = splits.map(s => Math.max(parseFloat(s.pct) || 0, 0));
-  const colors2 = splits.map(s => s.color);
-  updateSplitterDonut(data, colors2, splits.map(s => s.name));
+  // Donut includes bills as a segment
+  const donutData = [];
+  const donutColors = [];
+  const donutLabels = [];
+  if (billsReserve > 0) {
+    donutData.push(Math.round(billsReserve/amt*100));
+    donutColors.push('#f87171');
+    donutLabels.push('Bills reserve');
+  }
+  splits.forEach(s => {
+    donutData.push(Math.max(parseFloat(s.pct)||0,0) * remaining/amt);
+    donutColors.push(s.color);
+    donutLabels.push(s.name);
+  });
+  updateSplitterDonut(donutData, donutColors, donutLabels);
 
   if (legend) {
-    legend.innerHTML = splits.map(s => {
-      const portion = amt * (parseFloat(s.pct) || 0) / 100;
-      return `<div class="li"><span class="ldot" style="background:${s.color}"></span><span>${s.name}</span><span class="lval">${cur}${Math.round(portion).toLocaleString()}</span></div>`;
-    }).join('');
+    const items = [];
+    if (billsReserve > 0) items.push(`<div class="li"><span class="ldot" style="background:#f87171"></span><span>Bills reserve</span><span class="lval">${cur}${Math.round(billsReserve).toLocaleString()}</span></div>`);
+    splits.forEach(s => {
+      const portion = remaining*(parseFloat(s.pct)||0)/100;
+      items.push(`<div class="li"><span class="ldot" style="background:${s.color}"></span><span>${s.name}</span><span class="lval">${cur}${Math.round(portion).toLocaleString()}</span></div>`);
+    });
+    legend.innerHTML = items.join('');
   }
+}
+
+function nextDueDate(bill) {
+  const today = new Date();
+  const day = parseInt(bill.dueDay) || 1;
+  let d = new Date(today.getFullYear(), today.getMonth(), day);
+  if (d <= today) d = new Date(today.getFullYear(), today.getMonth()+1, day);
+  return d;
+}
+
+function formatDueDate(d) {
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+}
+
+function calcSetAside(bill, paycheck) {
+  // How much of this paycheck should go toward this bill?
+  const due = nextDueDate(bill);
+  const today = new Date();
+  const daysUntil = Math.ceil((due - today) / (1000*60*60*24));
+  const amt = parseFloat(bill.amount) || 0;
+  // If due within 7 days, reserve the full amount
+  if (daysUntil <= 7) return Math.min(amt, paycheck);
+  // If bi-weekly pay frequency, split across 2 paychecks
+  if (freq === 'biweekly') return amt / 2;
+  // Otherwise reserve full amount
+  return amt;
 }
 
 function updateSplitterDonut(data, bgColors, labels) {
