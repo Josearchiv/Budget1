@@ -113,6 +113,7 @@ function renderBills() {
       .modal-cancel{font-family:'DM Sans',sans-serif;font-size:14px;padding:11px 16px;border-radius:var(--rs);border:1px solid var(--bdr);background:transparent;color:var(--txm);cursor:pointer}
       .hist-entry{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr);font-size:12px}
       .due-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;padding:2px 7px;border-radius:10px}
+      @media(max-width:700px){.hist-cols{grid-template-columns:1fr!important}}
     `;
     document.head.appendChild(st);
   }
@@ -159,16 +160,33 @@ function renderBills() {
       <button class="add-bill-btn" onclick="openAddBillModal()"><i class="ti ti-plus"></i> Add a bill</button>
     </div>
 
-    <!-- HISTORY -->
-    <div class="cc">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
-        <div class="cctitle">Payment history</div>
-        <button onclick="clearBillHistory()" style="font-size:11px;background:none;border:none;cursor:pointer;color:var(--txf)">Clear</button>
+    <!-- HISTORY ROW -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+      <!-- BILL PAYMENT HISTORY -->
+      <div class="cc">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+          <div class="cctitle">Bill payment history</div>
+          <button onclick="clearBillHistory()" style="font-size:11px;background:none;border:none;cursor:pointer;color:var(--txf)">Clear</button>
+        </div>
+        <div class="ccsub">All recorded bill payments</div>
+        <div id="billHistoryList" style="max-height:340px;overflow-y:auto">
+          ${renderBillHistoryHTML()}
+        </div>
       </div>
-      <div class="ccsub">All recorded bill payments</div>
-      <div id="billHistoryList" style="max-height:280px;overflow-y:auto">
-        ${renderBillHistoryHTML()}
+
+      <!-- PAYCHECK HISTORY (fully expanded) -->
+      <div class="cc">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+          <div class="cctitle">Paycheck history</div>
+          <button onclick="clearPaycheckHistory()" style="font-size:11px;background:none;border:none;cursor:pointer;color:var(--txf)">Clear</button>
+        </div>
+        <div class="ccsub">Full breakdown of every saved paycheck</div>
+        <div id="billsPaycheckHistory" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:12px">
+          ${renderPaycheckHistoryExpanded()}
+        </div>
       </div>
+
     </div>
   `;
 }
@@ -263,11 +281,57 @@ function deleteBill(id) {
 }
 
 function clearBillHistory() {
-  if (!confirm('Clear all payment history?')) return;
+  if (!confirm('Clear all bill payment history?')) return;
   window._billHistory = [];
   scheduleSave();
   renderBills();
   toast('History cleared');
+}
+
+function clearPaycheckHistory() {
+  if (!confirm('Clear all paycheck history?')) return;
+  window._paycheckHistory = [];
+  scheduleSave();
+  renderBills();
+  toast('Paycheck history cleared');
+}
+
+function renderPaycheckHistoryExpanded() {
+  const hist = window._paycheckHistory || [];
+  if (!hist.length) return '<div style="text-align:center;color:var(--txf);font-size:13px;padding:16px 0">No paychecks saved yet</div>';
+
+  return hist.slice(0, 20).map(p => {
+    const billsInBreakdown = p.breakdown.filter(b => b.name === 'Bills reserve');
+    const splits = p.breakdown.filter(b => b.name !== 'Bills reserve');
+
+    return `<div style="background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--rs);overflow:hidden">
+      <!-- Paycheck header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--bdr);background:var(--surf)">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--tx)">${p.source}</div>
+          <div style="font-size:11px;color:var(--txm);margin-top:1px">${p.date}</div>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:17px;font-weight:600;color:var(--ac)">${cur}${Math.round(p.amount).toLocaleString()}</div>
+      </div>
+      <!-- Full breakdown always visible -->
+      <div style="padding:10px 14px;display:flex;flex-direction:column;gap:6px">
+        ${p.breakdown.map(b => `
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="width:8px;height:8px;border-radius:2px;background:${b.color||'var(--ac)'};flex-shrink:0;display:inline-block"></span>
+            <span style="font-size:13px;color:var(--tx);flex:1">${b.name}</span>
+            <span style="font-size:11px;color:var(--txm);min-width:30px;text-align:right">${b.pct}%</span>
+            <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--tx);min-width:70px;text-align:right">${cur}${Math.round(b.amount).toLocaleString()}</span>
+          </div>
+        `).join('')}
+        <div style="display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid var(--bdr);margin-top:2px">
+          <span style="font-size:12px;font-weight:600;color:var(--tx)">Total allocated</span>
+          <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--ac)">
+            ${cur}${Math.round(p.breakdown.reduce((s,b)=>s+b.amount,0)).toLocaleString()}
+          </span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── ADD / EDIT MODAL ──
