@@ -289,6 +289,7 @@ body.light .acpct{background:rgba(0,0,0,0.05)}
   <div class="ntabs">
     <button class="ntab active" onclick="showPage('overview',this)">Overview</button>
     <button class="ntab" onclick="showPage('splitter',this)">Income splitter</button>
+    <button class="ntab" onclick="showPage('bills',this)">Bills</button>
     <button class="ntab" onclick="showPage('transactions',this)">Transactions</button>
     <button class="ntab" onclick="showPage('goals',this)">Goals</button>
   </div>
@@ -360,6 +361,18 @@ body.light .acpct{background:rgba(0,0,0,0.05)}
         <div class="mc"><div class="mclbl"><i class="ti ti-piggy-bank"></i> Unallocated</div><div class="mcval" id="mcFree">$0</div><div class="mcsub">Available to assign</div></div>
         <div class="mc"><div class="mclbl"><i class="ti ti-calendar"></i> Annual total</div><div class="mcval" id="mcAnn">$60,000</div><div class="mcsub">Projected income</div></div>
       </div>
+      <!-- BILLS OVERVIEW CARD -->
+      <div class="cc" id="billsOverviewCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+          <div class="cctitle">Bills this month</div>
+          <button onclick="showPage('bills',document.querySelectorAll('.ntab')[1])" style="font-size:12px;background:none;border:none;cursor:pointer;color:var(--ac)">View all <i class="ti ti-arrow-right"></i></button>
+        </div>
+        <div class="ccsub">Monthly obligations overview</div>
+        <div id="billsOverviewContent" style="display:flex;flex-direction:column;gap:8px">
+          <div style="text-align:center;color:var(--txf);font-size:13px;padding:12px 0">No bills added yet</div>
+        </div>
+      </div>
+
       <div class="crow">
         <div class="cc">
           <div class="cctitle" id="donutTitle">Allocation breakdown</div>
@@ -381,6 +394,9 @@ body.light .acpct{background:rgba(0,0,0,0.05)}
 
     <!-- INCOME SPLITTER PAGE -->
     <div class="page" id="page-splitter"></div>
+
+    <!-- BILLS PAGE -->
+    <div class="page" id="page-bills"></div>
 
     <!-- TRANSACTIONS PAGE -->
     <div class="page" id="page-transactions">
@@ -507,5 +523,6 @@ body.light .acpct{background:rgba(0,0,0,0.05)}
 <div id="toast"></div>
 <script src="app.js"></script>
 <script src="income.js"></script>
+<script src="bills.js"></script>
 </body>
 </html>
