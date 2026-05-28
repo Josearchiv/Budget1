@@ -56,6 +56,7 @@ function showPage(id, btn) {
   if(btn) btn.classList.add('active');
   // Always re-render splitter so it picks up latest cats/data
   if(id==='splitter' && typeof renderSplitter==='function') renderSplitter();
+  if(id==='bills' && typeof renderBills==='function') renderBills();
 }
 
 // ── THEME ──
@@ -286,6 +287,8 @@ function loadFromCloud(d){
   if(d.isLight !== undefined){ isLight=d.isLight; document.body.classList.toggle('light', isLight); } // direct set, no scheduleSave
   if(d.incSplits) window._incSplits=[...d.incSplits];
   if(d.paycheckHistory) window._paycheckHistory=[...d.paycheckHistory];
+  if(d.bills) window._bills=[...d.bills];
+  if(d.billHistory) window._billHistory=[...d.billHistory];
   _lastSavedHash = dataHash(); // set AFTER loading so hash reflects loaded data
   if(myChart){myChart.destroy();myChart=null;}
   buildCatList(); updateDash(); rebuildACatList(); rebuildCatColList();
@@ -294,6 +297,7 @@ function loadFromCloud(d){
   if(splitterActive){
     if(typeof renderHistory==='function') renderHistory();
     if(typeof recalcSplit==='function') recalcSplit();
+    if(typeof refreshBillsUI==='function') refreshBillsUI();
   }
 }
 function saveToCloud(){
@@ -307,7 +311,7 @@ function saveToCloud(){
   window._cacheTs=ts;
   const ind=document.getElementById('saveInd'); if(ind) ind.classList.add('saving');
   const ref=db.collection('users').doc(currentUser.uid).collection('data').doc('budget');
-  const payload={cats,colors,baseMo,cur,isLight,incSplits:window._incSplits||[],paycheckHistory:window._paycheckHistory||[],_savedAt:ts};
+  const payload={cats,colors,baseMo,cur,isLight,incSplits:window._incSplits||[],paycheckHistory:window._paycheckHistory||[],bills:window._bills||[],billHistory:window._billHistory||[],_savedAt:ts};
   try{localStorage.setItem('budget_cache',JSON.stringify(payload));}catch(e){}
   ref.set(payload,{merge:true})
     .then(()=>{ if(ind) ind.classList.remove('saving'); })
@@ -321,7 +325,7 @@ function scheduleSave(){
 // Track last saved state to avoid saving when nothing changed
 let _lastSavedHash = '';
 function dataHash(){
-  return JSON.stringify({cats, colors, baseMo, cur, isLight});
+  return JSON.stringify({cats, colors, baseMo, cur, isLight, bills: window._bills||[], billHistory: window._billHistory||[]});
 }
 
 // ── AI CHAT ──
