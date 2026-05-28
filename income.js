@@ -293,30 +293,25 @@ function recalcSplit() {
   }
 }
 
-function nextDueDate(bill) {
-  const today = new Date();
-  const day = parseInt(bill.dueDay) || 1;
-  let d = new Date(today.getFullYear(), today.getMonth(), day);
-  if (d <= today) d = new Date(today.getFullYear(), today.getMonth()+1, day);
-  return d;
-}
-
-function formatDueDate(d) {
-  return d.toLocaleDateString('en-US', {month:'short', day:'numeric'});
-}
+// nextDueDate and formatDueDate are defined in bills.js
 
 function calcSetAside(bill, paycheck) {
-  // How much of this paycheck should go toward this bill?
-  const due = nextDueDate(bill);
-  const today = new Date();
-  const daysUntil = Math.ceil((due - today) / (1000*60*60*24));
   const amt = parseFloat(bill.amount) || 0;
-  // If due within 7 days, reserve the full amount
-  if (daysUntil <= 7) return Math.min(amt, paycheck);
-  // If bi-weekly pay frequency, split across 2 paychecks
-  if (freq === 'biweekly') return amt / 2;
-  // Otherwise reserve full amount
-  return amt;
+  const daysUntil = typeof getDaysUntilDue === 'function' ? getDaysUntilDue(bill) : 30;
+
+  // If due within 3 days — reserve full amount immediately
+  if (daysUntil <= 3) return Math.min(amt, paycheck);
+
+  // Calculate based on bill frequency
+  switch(bill.frequency || 'monthly') {
+    case 'daily':    return amt; // daily bills — always full amount
+    case 'weekly':   return freq === 'biweekly' ? amt * 2 : amt; // 2 weeks of weekly bills
+    case 'biweekly': return amt; // one biweekly payment per paycheck
+    case 'once':     return daysUntil <= 30 ? amt : 0; // one-time: only if due within 30 days
+    default:         // monthly
+      if (freq === 'biweekly') return amt / 2; // split monthly bill across 2 paychecks
+      return amt;
+  }
 }
 
 function updateSplitterDonut(data, bgColors, labels) {
