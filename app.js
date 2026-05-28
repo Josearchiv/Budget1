@@ -59,7 +59,7 @@ function showPage(id, btn) {
 }
 
 // ── THEME ──
-function toggleTheme(){ isLight=!isLight; document.body.classList.toggle('light',isLight); scheduleSave(); toast(isLight?'Light mode':'Dark mode'); }
+function toggleTheme(){ isLight=!isLight; document.body.classList.toggle('light',isLight); scheduleSave(); toast(isLight?'☀️ Light mode':'🌑 Dark mode'); }
 
 // ── INCOME ──
 function onIncType(v){
@@ -107,8 +107,10 @@ function updateCatBars(){
 }
 function addCat(){
   newN++; cats.push({name:'Category '+newN,pct:0}); colors.push(DEFCOLORS[newN%DEFCOLORS.length]);
-  if(myChart){myChart.destroy();myChart=null;}
-  buildCatList(); updateDash(); rebuildACatList(); rebuildCatColList();
+  buildCatList();
+  updateDash();
+  rebuildACatList();
+  rebuildCatColList();
   scheduleSave();
   setTimeout(()=>{const ins=document.querySelectorAll('.cname');if(ins.length)ins[ins.length-1].focus();},50);
 }
@@ -264,12 +266,14 @@ function startDataSync(uid){
   unsub=ref.onSnapshot(snap=>{
     if(snap.exists){
       const d=snap.data();
-      // Only update UI if this is newer than what we last saved
-      // and newer than what we loaded from cache
-      const cacheTs = window._cacheTs || 0;
-      if(d._savedAt !== window._lastSaveTs && d._savedAt !== cacheTs){
-        loadFromCloud(d);
-      }
+      const ts = d._savedAt || 0;
+      // Skip if this snapshot is from our own recent save
+      if(ts === window._lastSaveTs) return;
+      // Skip if we already loaded this exact snapshot
+      if(ts === window._cacheTs) return;
+      // Skip if snapshot is older than our local data
+      if(ts < (window._cacheTs || 0)) return;
+      loadFromCloud(d);
     }
   }, err=>{ console.error('Snapshot error:', err); });
 }
@@ -279,7 +283,7 @@ function loadFromCloud(d){
   if(d.colors) colors=[...d.colors];
   if(d.baseMo!==undefined){ baseMo=d.baseMo; document.getElementById('incInput').value=Math.round(dispInc()).toLocaleString(); document.getElementById('aInc').value=Math.round(baseMo); }
   if(d.cur){ cur=d.cur; document.getElementById('curSym').textContent=cur; document.getElementById('aCur').value=cur; }
-  if(d.isLight !== undefined){ isLight=d.isLight; document.body.classList.toggle('light', isLight); }
+  if(d.isLight !== undefined){ isLight=d.isLight; document.body.classList.toggle('light', isLight); } // direct set, no scheduleSave
   if(d.incSplits) window._incSplits=[...d.incSplits];
   if(d.paycheckHistory) window._paycheckHistory=[...d.paycheckHistory];
   _lastSavedHash = dataHash(); // set AFTER loading so hash reflects loaded data
@@ -297,7 +301,10 @@ function saveToCloud(){
   const h=dataHash();
   if(h===_lastSavedHash) return;
   _lastSavedHash=h;
-  const ts=Date.now(); window._lastSaveTs=ts; window._cacheTs=ts;
+  const ts=Date.now();
+  // Stamp BOTH before writing so onSnapshot skips our own save
+  window._lastSaveTs=ts;
+  window._cacheTs=ts;
   const ind=document.getElementById('saveInd'); if(ind) ind.classList.add('saving');
   const ref=db.collection('users').doc(currentUser.uid).collection('data').doc('budget');
   const payload={cats,colors,baseMo,cur,isLight,incSplits:window._incSplits||[],paycheckHistory:window._paycheckHistory||[],_savedAt:ts};
