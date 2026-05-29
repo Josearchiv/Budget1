@@ -247,6 +247,9 @@ body.light .acpct{background:rgba(0,0,0,0.05)}
 .authdiv::before,.authdiv::after{content:"";flex:1;height:1px;background:var(--bdr)}
 .autherr{font-size:12px;color:var(--rd);text-align:center;min-height:16px}
 .authfoot{font-size:12px;color:var(--txm);text-align:center}
+.live-clock{display:flex;flex-direction:column;align-items:flex-end;gap:1px;padding:4px 10px;background:var(--surf2);border:1px solid var(--bdr);border-radius:8px}
+#clockTime{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--tx);line-height:1}
+#clockDate{font-size:10px;color:var(--txm);line-height:1}
 </style>
 </head>
 <body>
@@ -295,6 +298,7 @@ body.light .acpct{background:rgba(0,0,0,0.05)}
     <button class="ntab" onclick="showPage('goals',this)">Goals</button>
   </div>
   <div class="nright">
+    <div class="live-clock" id="liveClock"><span id="clockTime"></span><span id="clockDate"></span></div>
     <div class="tgtoggle" onclick="toggleTheme()">
       <i class="ti ti-sun tgicon"></i>
       <div class="tgtrack"><div class="tgthumb"></div></div>
@@ -487,6 +491,24 @@ body.light .acpct{background:rgba(0,0,0,0.05)}
         <span></span><button class="abtn sec" style="padding:13px" onclick="pcP('0')">0</button><button class="abtn sec" style="padding:13px" onclick="pcDel()"><i class="ti ti-backspace"></i></button>
       </div>
       <div id="pcSt" style="font-size:12px;text-align:center;margin-top:10px;color:var(--txm)"></div>
+      <div class="dsec" style="margin-top:4px">Time zone</div>
+      <div class="drow"><div class="drlbl">Display time zone<small>Auto-detected or set manually</small></div>
+        <select class="dsel" id="tzSelect" onchange="setTimezone(this.value)" style="width:200px">
+          <option value="auto">Auto (device)</option>
+          <option value="America/New_York">Eastern (ET)</option>
+          <option value="America/Chicago">Central (CT)</option>
+          <option value="America/Denver">Mountain (MT)</option>
+          <option value="America/Los_Angeles">Pacific (PT)</option>
+          <option value="America/Anchorage">Alaska (AKT)</option>
+          <option value="Pacific/Honolulu">Hawaii (HT)</option>
+          <option value="Europe/London">London (GMT)</option>
+          <option value="Europe/Paris">Paris (CET)</option>
+          <option value="Europe/Berlin">Berlin (CET)</option>
+          <option value="Asia/Tokyo">Tokyo (JST)</option>
+          <option value="Asia/Dubai">Dubai (GST)</option>
+          <option value="Australia/Sydney">Sydney (AEST)</option>
+        </select>
+      </div>
       <div class="dsec" style="margin-top:4px">Session</div>
       <button class="abtn dan" onclick="toast('Lock screen coming soon!')"><i class="ti ti-lock"></i> Lock app</button>
     </div>
