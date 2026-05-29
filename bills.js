@@ -122,7 +122,12 @@ function formatDate(d){
 // ── REFRESH ALL BILLS UI ──
 function refreshBillsUI(){
   const pg = document.getElementById('page-bills');
-  if(pg && pg.classList.contains('active')) renderBills();
+  if(pg && pg.classList.contains('active')){
+    // Update cycle paid list in place if possible
+    const cyclePaid = document.getElementById('cyclePaidList');
+    if(cyclePaid) cyclePaid.innerHTML = renderCyclePaidBills();
+    else renderBills();
+  }
   updateBillsOverviewTabs();
   tickCalendar();
 }
@@ -231,27 +236,27 @@ function renderBills(){
       </div>
     </div>` : ''}
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-      <div class="cc">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
-          <div class="cctitle">Bill payment history</div>
-          <button onclick="clearBillHistory()" style="font-size:11px;background:none;border:none;cursor:pointer;color:var(--txf)">Clear</button>
-        </div>
-        <div class="ccsub">All recorded bill payments</div>
-        <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:0">
-          ${renderBillHistoryHTML()}
-        </div>
+    <!-- CYCLE HISTORY (merged bill payments + unpay) -->
+    <div class="cc">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+        <div class="cctitle">This cycle — paid bills</div>
+        <button onclick="clearBillHistory()" style="font-size:11px;background:none;border:none;cursor:pointer;color:var(--txf)">Clear cycle</button>
       </div>
+      <div class="ccsub">Live view of bills paid this month — click to unpay</div>
+      <div style="display:flex;flex-direction:column;gap:0" id="cyclePaidList">
+        ${renderCyclePaidBills()}
+      </div>
+    </div>
 
-      <div class="cc">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
-          <div class="cctitle">Paycheck history</div>
-          <button onclick="clearPaycheckHistoryFromBills()" style="font-size:11px;background:none;border:none;cursor:pointer;color:var(--txf)">Clear</button>
-        </div>
-        <div class="ccsub">Tap a month to expand</div>
-        <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:6px" id="paycheckMonthGroups">
-          ${renderPaycheckMonthGroups()}
-        </div>
+    <!-- PAYCHECK HISTORY — month grouped -->
+    <div class="cc">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+        <div class="cctitle">Paycheck history</div>
+        <button onclick="clearPaycheckHistoryFromBills()" style="font-size:11px;background:none;border:none;cursor:pointer;color:var(--txf)">Clear</button>
+      </div>
+      <div class="ccsub">Tap a month to expand · tap a paycheck for full detail</div>
+      <div style="display:flex;flex-direction:column;gap:6px" id="paycheckMonthGroups">
+        ${renderPaycheckMonthGroups()}
       </div>
     </div>
   `;
@@ -423,14 +428,29 @@ function openPaycheckDetail(id){
 }
 
 function renderBillHistoryHTML(){
-  const hist = window._billHistory||[];
-  if(!hist.length) return '<div style="text-align:center;color:var(--txf);font-size:13px;padding:16px 0">No payment history yet</div>';
-  return hist.slice(0,30).map(h=>`
-    <div class="hist-entry">
+  // kept for history.js compatibility
+  return renderCyclePaidBills();
+}
+
+function renderCyclePaidBills(){
+  const today = new Date();
+  const hist = (window._billHistory||[]).filter(h=>{
+    const d = new Date(h.date);
+    return d.getMonth()===today.getMonth() && d.getFullYear()===today.getFullYear();
+  });
+  if(!hist.length) return '<div style="text-align:center;color:var(--txf);font-size:13px;padding:16px 0">No bills paid yet this cycle</div>';
+  return hist.map(h=>`
+    <div class="hist-entry" style="padding:9px 0">
       <span style="width:8px;height:8px;border-radius:2px;background:${BILL_COLORS[h.category]||'var(--ac)'};flex-shrink:0;display:inline-block"></span>
-      <span style="flex:1;color:var(--tx);font-weight:500;font-size:13px">${h.name}</span>
-      <span style="color:var(--txm);font-size:11px">${h.date}</span>
-      <span style="font-family:'DM Mono',monospace;color:var(--gr);font-weight:500;font-size:12px">${cur}${Math.round(parseFloat(h.amount)||0).toLocaleString()}</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500;color:var(--tx)">${h.name}</div>
+        <div style="font-size:11px;color:var(--txm)">${h.date}</div>
+      </div>
+      <span style="font-family:'DM Mono',monospace;color:var(--gr);font-weight:500;font-size:13px">${cur}${Math.round(parseFloat(h.amount)||0).toLocaleString()}</span>
+      <button onclick="unpayBill('${h.billId||''}','${h.id}')" title="Unpay this bill"
+        style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);border-radius:5px;cursor:pointer;color:var(--rd);font-size:11px;padding:3px 8px;font-family:'DM Sans',sans-serif;white-space:nowrap">
+        <i class="ti ti-arrow-back-up"></i> Unpay
+      </button>
     </div>
   `).join('');
 }
@@ -442,7 +462,7 @@ function toggleBillPaid(id){
   if(b.paid){
     b.paidDate=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     if(!window._billHistory) window._billHistory=[];
-    window._billHistory.unshift({name:b.name,amount:b.amount,category:b.category,date:b.paidDate,id:Date.now()});
+    window._billHistory.unshift({name:b.name,amount:b.amount,category:b.category,date:b.paidDate,id:Date.now(),billId:b.id});
     if(window._billHistory.length>100) window._billHistory=window._billHistory.slice(0,100);
     // One-time bills: remove after paying
     if(b.frequency==='once'){
@@ -465,6 +485,19 @@ function deleteBill(id){
   if(!confirm('Delete this bill?')) return;
   window._bills=(window._bills||[]).filter(b=>b.id!==id);
   scheduleSave(); renderBills(); updateBillsOverviewTabs(); toast('Bill deleted');
+}
+
+function unpayBill(billId, histId){
+  // Remove from bill history
+  window._billHistory = (window._billHistory||[]).filter(h=>String(h.id)!==String(histId));
+  // Find the bill and mark as unpaid
+  const b = (window._bills||[]).find(x=>x.id===billId);
+  if(b){ b.paid=false; b.paidDate=null; }
+  scheduleSave();
+  renderBills();
+  updateBillsOverviewTabs();
+  if(typeof updateBillsOverview==='function') updateBillsOverview();
+  toast('Bill marked as unpaid');
 }
 
 function clearBillHistory(){
