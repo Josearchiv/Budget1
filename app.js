@@ -26,6 +26,7 @@ let period  = 'monthly';
 let myChart = null;
 let splitterChart = null;
 let isLight = false;
+let userTimezone = 'auto';
 let passcode= '1234';
 let pcEntry = '';
 let newN    = 0;
@@ -286,6 +287,7 @@ function loadFromCloud(d){
   if(d.baseMo!==undefined){ baseMo=d.baseMo; document.getElementById('incInput').value=Math.round(dispInc()).toLocaleString(); document.getElementById('aInc').value=Math.round(baseMo); }
   if(d.cur){ cur=d.cur; document.getElementById('curSym').textContent=cur; document.getElementById('aCur').value=cur; }
   if(d.isLight !== undefined){ isLight=d.isLight; document.body.classList.toggle('light', isLight); } // direct set, no scheduleSave
+  if(d.userTimezone){ userTimezone=d.userTimezone; const el=document.getElementById('tzSelect'); if(el)el.value=userTimezone; }
   if(d.incSplits) window._incSplits=[...d.incSplits];
   if(d.paycheckHistory) window._paycheckHistory=[...d.paycheckHistory];
   if(d.bills) window._bills=[...d.bills];
@@ -314,7 +316,7 @@ function saveToCloud(){
   window._cacheTs=ts;
   const ind=document.getElementById('saveInd'); if(ind) ind.classList.add('saving');
   const ref=db.collection('users').doc(currentUser.uid).collection('data').doc('budget');
-  const payload={cats,colors,baseMo,cur,isLight,incSplits:window._incSplits||[],paycheckHistory:window._paycheckHistory||[],bills:window._bills||[],billHistory:window._billHistory||[],monthlyArchive:window._monthlyArchive||[],_savedAt:ts};
+  const payload={cats,colors,baseMo,cur,isLight,userTimezone,incSplits:window._incSplits||[],paycheckHistory:window._paycheckHistory||[],bills:window._bills||[],billHistory:window._billHistory||[],monthlyArchive:window._monthlyArchive||[],_savedAt:ts};
   try{localStorage.setItem('budget_cache',JSON.stringify(payload));}catch(e){}
   ref.set(payload,{merge:true})
     .then(()=>{ if(ind) ind.classList.remove('saving'); })
@@ -328,7 +330,7 @@ function scheduleSave(){
 // Track last saved state to avoid saving when nothing changed
 let _lastSavedHash = '';
 function dataHash(){
-  return JSON.stringify({cats, colors, baseMo, cur, isLight, bills: window._bills||[], billHistory: window._billHistory||[], monthlyArchive: window._monthlyArchive||[]});
+  return JSON.stringify({cats, colors, baseMo, cur, isLight, userTimezone, bills: window._bills||[], billHistory: window._billHistory||[], monthlyArchive: window._monthlyArchive||[]});
 }
 
 // ── AI CHAT ──
@@ -375,6 +377,49 @@ function execAct(a){
   updateDash();
 }
 
+// ── CLOCK & TIMEZONE ──
+function setTimezone(tz){
+  userTimezone = tz;
+  scheduleSave();
+  updateClock();
+}
+
+function updateClock(){
+  const now = new Date();
+  const tz = userTimezone === 'auto' ? Intl.DateTimeFormat().resolvedOptions().timeZone : userTimezone;
+  const timeStr = now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true,timeZone:tz});
+  const dateStr = now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:tz});
+  const tEl = document.getElementById('clockTime');
+  const dEl = document.getElementById('clockDate');
+  if(tEl) tEl.textContent = timeStr;
+  if(dEl) dEl.textContent = dateStr;
+}
+
+// Start clock
+setInterval(updateClock, 1000);
+
+// ── SHARED HISTORY STATE ──
+// All history functions use a single source of truth
+// overview and history tab always read from the same window._* arrays
+function deletePaycheck(id){
+  window._paycheckHistory = (window._paycheckHistory||[]).filter(p=>p.id!==id);
+  scheduleSave();
+  // refresh both tabs
+  if(document.getElementById('page-history').classList.contains('active') && typeof renderHistory==='function') renderHistory();
+  if(typeof updateBillsOverviewTabs==='function') updateBillsOverviewTabs();
+  if(typeof renderBills==='function' && document.getElementById('page-bills').classList.contains('active')) renderBills();
+  toast('Paycheck deleted');
+}
+
+function deleteBillPayment(id){
+  window._billHistory = (window._billHistory||[]).filter(h=>h.id!==id);
+  scheduleSave();
+  if(document.getElementById('page-history').classList.contains('active') && typeof renderHistory==='function') renderHistory();
+  if(typeof updateBillsOverviewTabs==='function') updateBillsOverviewTabs();
+  if(typeof renderBills==='function' && document.getElementById('page-bills').classList.contains('active')) renderBills();
+  toast('Payment record deleted');
+}
+
 // ── INIT ──
 // Show skeleton loader instantly, hide app until data is ready
 document.querySelector('.app').style.visibility = 'hidden';
@@ -392,3 +437,4 @@ auth.onAuthStateChanged(user=>{
 if(localStorage.getItem(AIKEY)) document.getElementById('bdot').classList.add('on');
 buildCatList();
 updateDash();
+updateClock();
